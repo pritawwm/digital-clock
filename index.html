@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#080808" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Digital Clock" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'sha256-QoT3woHG98nwMa0UrHodbwUvnUAjQ0pVpCtMU+ahrZY='; script-src 'sha256-Ny8FUm5R2DReEZHmP8AlB5CFOZjg9vRggfy87AfpZR4='; img-src 'self'; connect-src 'none'; font-src 'none'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'"
+    />
+    <title>Digital Clock</title>
+    <style>
+      :root {
+        --bg-color: #080808;
+        --segment-active: #f4f4f2;
+        --segment-inactive: #1c1c1c;
+        --text-muted: #707070;
+        --border-color: #303030;
+        --button-hover: rgba(255, 255, 255, 0.055);
+        --accent-focus: #c9ff6b;
+        --digit-width: min(11vw, 22vh, 8.5rem);
+        --digit-height: calc(var(--digit-width) * 1.8);
+        --colon-width: calc(var(--digit-width) * 0.32);
+        --digit-gap: clamp(0.2rem, 1.2vw, 1rem);
+        --colon-gap: clamp(0.15rem, 0.8vw, 0.6rem);
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        background-color: var(--bg-color);
+        color: var(--segment-active);
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", monospace;
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+        overflow: hidden;
+      }
+
+      main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        min-height: 100svh;
+        padding: clamp(1rem, 3vw, 2.5rem);
+        gap: 2.5rem;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      .clock-display {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        max-width: 100%;
+      }
+
+      .digit-pair {
+        display: flex;
+        align-items: center;
+        gap: var(--digit-gap);
+      }
+
+      .digit {
+        width: var(--digit-width);
+        height: var(--digit-height);
+        display: block;
+        flex-shrink: 0;
+      }
+
+      .colon {
+        width: var(--colon-width);
+        height: var(--digit-height);
+        margin: 0 var(--colon-gap);
+        display: block;
+        flex-shrink: 0;
+      }
+
+      .segment,
+      .colon-dot {
+        fill: var(--segment-inactive);
+        filter: none !important;
+        transition: fill 75ms linear;
+      }
+
+      .segment.active,
+      .colon-dot.active {
+        fill: var(--segment-active);
+        filter: none !important;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 2.5rem;
+      }
+
+      .fullscreen-btn {
+        width: 42px;
+        height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.015);
+        color: var(--text-muted);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          color 150ms ease,
+          border-color 150ms ease,
+          background-color 150ms ease;
+      }
+
+      .fullscreen-btn svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: square;
+      }
+
+      .fullscreen-btn:hover {
+        color: var(--segment-active);
+        border-color: #555;
+        background-color: var(--button-hover);
+      }
+
+      .fullscreen-btn:focus-visible {
+        outline: 2px solid var(--accent-focus);
+        outline-offset: 3px;
+        color: var(--segment-active);
+      }
+
+      :fullscreen {
+        --safe-x: calc(
+          env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px)
+        );
+        --safe-y: calc(
+          env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px)
+        );
+        --digit-width: min(
+          calc((100vw - var(--safe-x) - 2rem) / 7.2),
+          calc((100vh - var(--safe-y) - 2rem) / 1.8)
+        );
+        --digit-gap: calc(var(--digit-width) * 0.08);
+        --colon-gap: calc(var(--digit-width) * 0.05);
+      }
+
+      @supports (height: 100dvh) {
+        :fullscreen {
+          --digit-width: min(
+            calc((100vw - var(--safe-x) - 2rem) / 7.2),
+            calc((100dvh - var(--safe-y) - 2rem) / 1.8)
+          );
+        }
+      }
+
+      :fullscreen main {
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+          env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+        gap: 0;
+      }
+
+      :fullscreen .controls {
+        display: none !important;
+      }
+
+      :fullscreen .clock-display {
+        width: 100%;
+        height: 100%;
+        justify-content: center;
+      }
+
+      @media (orientation: portrait) {
+        :fullscreen {
+          --digit-width: min(
+            calc((100vw - var(--safe-x) - 2rem) / 2.4),
+            calc((100vh - var(--safe-y) - 2rem) / 6.3)
+          );
+        }
+
+        @supports (height: 100dvh) {
+          :fullscreen {
+            --digit-width: min(
+              calc((100vw - var(--safe-x) - 2rem) / 2.4),
+              calc((100dvh - var(--safe-y) - 2rem) / 6.3)
+            );
+          }
+        }
+
+        :fullscreen .clock-display {
+          flex-direction: column;
+          gap: calc(var(--digit-width) * 0.3);
+        }
+
+        :fullscreen .colon {
+          display: none;
+        }
+      }
+
+      .controls {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .controls[hidden] {
+        display: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .segment,
+        .colon-dot,
+        .fullscreen-btn {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <time
+        id="accessible-time"
+        class="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+      ></time>
+
+      <div class="clock-display" role="region" aria-label="Digital Clock">
+        <div class="digit-pair" data-unit="hours">
+          <svg
+            class="digit"
+            data-index="0"
+            viewBox="0 0 100 180"
+            aria-hidden="true"
+          ></svg>
+          <svg
+            class="digit"
+            data-index="1"
+            viewBox="0 0 100 180"
+            aria-hidden="true"
+          ></svg>
+        </div>
+
+        <svg class="colon" viewBox="0 0 32 180" aria-hidden="true">
+          <polygon class="colon-dot active" points="16,50 26,60 16,70 6,60" />
+          <polygon
+            class="colon-dot active"
+            points="16,110 26,120 16,130 6,120"
+          />
+        </svg>
+
+        <div class="digit-pair" data-unit="minutes">
+          <svg
+            class="digit"
+            data-index="2"
+            viewBox="0 0 100 180"
+            aria-hidden="true"
+          ></svg>
+          <svg
+            class="digit"
+            data-index="3"
+            viewBox="0 0 100 180"
+            aria-hidden="true"
+          ></svg>
+        </div>
+
+        <svg class="colon" viewBox="0 0 32 180" aria-hidden="true">
+          <polygon class="colon-dot active" points="16,50 26,60 16,70 6,60" />
+          <polygon
+            class="colon-dot active"
+            points="16,110 26,120 16,130 6,120"
+          />
+        </svg>
+
+        <div class="digit-pair" data-unit="seconds">
+          <svg
+            class="digit"
+            data-index="4"
+            viewBox="0 0 100 180"
+            aria-hidden="true"
+          ></svg>
+          <svg
+            class="digit"
+            data-index="5"
+            viewBox="0 0 100 180"
+            aria-hidden="true"
+          ></svg>
+        </div>
+      </div>
+
+      <nav class="controls" aria-label="Clock controls">
+        <button
+          type="button"
+          id="fullscreenToggle"
+          class="fullscreen-btn"
+          title="Enter fullscreen"
+          aria-label="Enter fullscreen"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 4H4v4M16 4h4v4M20 16v4h-4M4 16v4h4" />
+          </svg>
+        </button>
+      </nav>
+    </main>
+
+    <script>
+      (() => {
+        "use strict";
+
+        const SEGMENT_COORDINATES = {
+          a: "14,12 22,4 78,4 86,12 78,20 22,20",
+          b: "88,14 96,22 96,80 88,88 80,80 80,22",
+          c: "88,92 96,100 96,158 88,166 80,158 80,100",
+          d: "14,168 22,160 78,160 86,168 78,176 22,176",
+          e: "12,92 20,100 20,158 12,166 4,158 4,100",
+          f: "12,14 20,22 20,80 12,88 4,80 4,22",
+          g: "14,90 22,82 78,82 86,90 78,98 22,98",
+        };
+
+        const NUMERAL_SEGMENTS = {
+          0: ["a", "b", "c", "d", "e", "f"],
+          1: ["b", "c"],
+          2: ["a", "b", "d", "e", "g"],
+          3: ["a", "b", "c", "d", "g"],
+          4: ["b", "c", "f", "g"],
+          5: ["a", "c", "d", "f", "g"],
+          6: ["a", "c", "d", "e", "f", "g"],
+          7: ["a", "b", "c"],
+          8: ["a", "b", "c", "d", "e", "f", "g"],
+          9: ["a", "b", "c", "d", "f", "g"],
+        };
+
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        const segmentKeys = Object.keys(SEGMENT_COORDINATES);
+
+        let tickTimer = null;
+        let cachedChars = ["", "", "", "", "", ""];
+        let lastMinuteAnnounced = "";
+
+        const digitSvgs = Array.from(document.querySelectorAll(".digit"));
+        const fullscreenToggle = document.getElementById("fullscreenToggle");
+        const controls = document.querySelector(".controls");
+        const accessibleTime = document.getElementById("accessible-time");
+
+        const digitMap = digitSvgs.map((svg) => {
+          const polygonRefs = {};
+          for (const key of segmentKeys) {
+            const polygon = document.createElementNS(SVG_NS, "polygon");
+            polygon.setAttribute("points", SEGMENT_COORDINATES[key]);
+            polygon.setAttribute("class", "segment");
+            svg.appendChild(polygon);
+            polygonRefs[key] = polygon;
+          }
+          return polygonRefs;
+        });
+
+        function renderDigit(digitIndex, char) {
+          if (cachedChars[digitIndex] === char) return;
+          cachedChars[digitIndex] = char;
+
+          const activeList = NUMERAL_SEGMENTS[char] || [];
+          const polygons = digitMap[digitIndex];
+
+          for (const key of segmentKeys) {
+            polygons[key].classList.toggle("active", activeList.includes(key));
+          }
+        }
+
+        function padZero(num) {
+          return num < 10 ? "0" + num : String(num);
+        }
+
+        function tick() {
+          const now = new Date();
+          const hours = now.getHours();
+          const minutes = now.getMinutes();
+          const seconds = now.getSeconds();
+
+          const timeDigits =
+            padZero(hours) + padZero(minutes) + padZero(seconds);
+
+          for (let i = 0; i < 6; i++) {
+            renderDigit(i, timeDigits[i]);
+          }
+
+          const minuteKey = `${hours}:${minutes}`;
+          if (minuteKey !== lastMinuteAnnounced) {
+            lastMinuteAnnounced = minuteKey;
+            const label = `${padZero(hours)}:${padZero(minutes)}`;
+            accessibleTime.textContent = `Current time: ${label}`;
+            accessibleTime.setAttribute(
+              "datetime",
+              `${padZero(hours)}:${padZero(minutes)}:${padZero(seconds)}`,
+            );
+          }
+        }
+
+        function scheduleNextTick() {
+          if (tickTimer) clearTimeout(tickTimer);
+          tick();
+          const msUntilNextSecond = 1000 - (Date.now() % 1000) + 15;
+          tickTimer = setTimeout(scheduleNextTick, msUntilNextSecond);
+        }
+
+        async function toggleFullscreen() {
+          try {
+            if (!document.fullscreenElement) {
+              await document.documentElement.requestFullscreen();
+            } else {
+              await document.exitFullscreen();
+            }
+          } catch (_error) {}
+        }
+
+        function syncFullscreenButton() {
+          const isFullscreen = Boolean(document.fullscreenElement);
+          fullscreenToggle.title = isFullscreen
+            ? "Exit fullscreen"
+            : "Enter fullscreen";
+          fullscreenToggle.setAttribute("aria-label", fullscreenToggle.title);
+        }
+
+        const LOW_BATTERY_LEVEL = 0.2;
+        let wakeLock = null;
+        let wakeLockPending = false;
+        let retryArmed = false;
+        let battery = null;
+
+        function isPowerSaving() {
+          return (
+            battery !== null &&
+            !battery.charging &&
+            battery.level <= LOW_BATTERY_LEVEL
+          );
+        }
+
+        function releaseWakeLock() {
+          if (!wakeLock) return;
+          const sentinel = wakeLock;
+          wakeLock = null;
+          sentinel.release().catch(() => {});
+        }
+
+        function retryOnNextInteraction() {
+          if (retryArmed) return;
+          retryArmed = true;
+          const retry = () => {
+            retryArmed = false;
+            document.removeEventListener("pointerdown", retry);
+            document.removeEventListener("keydown", retry);
+            requestWakeLock();
+          };
+          document.addEventListener("pointerdown", retry);
+          document.addEventListener("keydown", retry);
+        }
+
+        async function requestWakeLock() {
+          if (!("wakeLock" in navigator)) return;
+          if (wakeLock || wakeLockPending) return;
+          if (document.visibilityState !== "visible" || isPowerSaving()) return;
+
+          wakeLockPending = true;
+          try {
+            const sentinel = await navigator.wakeLock.request("screen");
+            wakeLock = sentinel;
+            sentinel.addEventListener("release", () => {
+              if (wakeLock === sentinel) wakeLock = null;
+            });
+            if (isPowerSaving()) releaseWakeLock();
+          } catch (_error) {
+            retryOnNextInteraction();
+          } finally {
+            wakeLockPending = false;
+          }
+        }
+
+        async function setUpBattery() {
+          if (typeof navigator.getBattery !== "function") return;
+          try {
+            battery = await navigator.getBattery();
+            const update = () =>
+              isPowerSaving() ? releaseWakeLock() : requestWakeLock();
+            battery.addEventListener("levelchange", update);
+            battery.addEventListener("chargingchange", update);
+          } catch (_error) {
+            battery = null;
+          }
+        }
+
+        if (!document.documentElement.requestFullscreen) {
+          controls.hidden = true;
+        }
+
+        fullscreenToggle.addEventListener("click", toggleFullscreen);
+        document.addEventListener("fullscreenchange", syncFullscreenButton);
+
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            requestWakeLock();
+            if (tickTimer) {
+              clearTimeout(tickTimer);
+              tickTimer = null;
+            }
+            scheduleNextTick();
+          } else if (tickTimer) {
+            clearTimeout(tickTimer);
+            tickTimer = null;
+          }
+        });
+
+        scheduleNextTick();
+        setUpBattery().then(requestWakeLock);
+
+        if ("serviceWorker" in navigator) {
+          window.addEventListener("load", () => {
+            navigator.serviceWorker.register("./sw.js").catch(() => {});
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
